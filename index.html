@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compact P2P Messenger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .hidden { display: none; }
+        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+
+    <div class="max-w-4xl mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold flex items-center gap-2">
+                    <i class="fas fa-bolt text-yellow-400"></i> Compact P2P Messenger
+                </h1>
+                <p class="text-slate-400 mt-1 text-sm">Direct browser-to-browser connection via WebRTC.</p>
+            </div>
+            <div id="status-badge" class="px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-red-500/10 border-red-500 text-red-400">
+                <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></div>
+                Status: <span id="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Role Selection -->
+        <div id="setup-screen" class="grid grid-cols-1 md:grid-cols-2 gap-6 py-12">
+            <button onclick="startAsHost()" class="p-8 bg-slate-900 border border-slate-800 rounded-2xl hover:border-blue-500 transition-all text-left group">
+                <div class="bg-blue-500/20 p-3 rounded-lg w-fit mb-4 group-hover:bg-blue-500/40 transition-colors">
+                    <i class="fas fa-share-nodes text-blue-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-2 text-white">Host</h3>
+                <p class="text-slate-400">Create a short code for a friend.</p>
+            </button>
+            <button onclick="startAsJoiner()" class="p-8 bg-slate-900 border border-slate-800 rounded-2xl hover:border-purple-500 transition-all text-left group">
+                <div class="bg-purple-500/20 p-3 rounded-lg w-fit mb-4 group-hover:bg-purple-500/40 transition-colors">
+                    <i class="fas fa-user-plus text-purple-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-2 text-white">Join</h3>
+                <p class="text-slate-400">Enter a short code to connect.</p>
+            </button>
+        </div>
+
+        <!-- Connection UI -->
+        <div id="main-container" class="hidden bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[500px] flex flex-col shadow-2xl">
+            
+            <!-- Handshake Steps -->
+            <div id="handshake-ui" class="p-6 border-b border-slate-800 bg-slate-900/50">
+                <div class="flex items-center gap-2 text-blue-400 mb-4 text-[10px] font-bold uppercase tracking-widest">
+                    <i class="fas fa-shield-halved"></i> Secure Handshake: <span id="step-indicator">Step 1</span>
+                </div>
+
+                <!-- Host Step 1 -->
+                <div id="host-step-1" class="hidden space-y-4">
+                    <p class="text-sm text-slate-300">Copy this short connection code and send it to your friend:</p>
+                    <div class="flex gap-2">
+                        <div id="host-offer-box" class="bg-black p-3 rounded-lg text-[10px] font-mono w-full h-20 border border-slate-700 overflow-y-auto break-all text-blue-300 select-all">
+                            Gathering network data...
+                        </div>
+                        <button onclick="copyHandshake('host-offer-box')" class="bg-slate-800 hover:bg-slate-700 px-4 rounded-lg flex items-center justify-center shrink-0 transition-colors">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <button id="host-next-btn" disabled onclick="goToStep(2)" class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 py-3 rounded-xl font-bold transition-all text-white">
+                        I've sent it, now wait for Answer
+                    </button>
+                </div>
+
+                <!-- Host Step 2 -->
+                <div id="host-step-2" class="hidden space-y-4">
+                    <p class="text-sm text-slate-300">Paste your friend's response code:</p>
+                    <textarea id="host-answer-input" placeholder="Paste response code here..." class="bg-black p-3 rounded-lg text-xs font-mono w-full h-20 border border-slate-700 focus:border-blue-500 focus:outline-none text-purple-300"></textarea>
+                    <button onclick="handleHostApplyAnswer()" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl font-bold transition-all text-white">
+                        Link Browsers
+                    </button>
+                </div>
+
+                <!-- Joiner Step 1 -->
+                <div id="joiner-step-1" class="hidden space-y-4">
+                    <p class="text-sm text-slate-300">Paste the host's connection code:</p>
+                    <textarea id="joiner-offer-input" placeholder="Paste short code here..." class="bg-black p-3 rounded-lg text-xs font-mono w-full h-20 border border-slate-700 focus:border-purple-500 focus:outline-none text-blue-300"></textarea>
+                    <button onclick="handleJoinerApplyOffer()" class="w-full bg-purple-600 hover:bg-purple-500 py-3 rounded-xl font-bold transition-all text-white">
+                        Generate Response
+                    </button>
+                </div>
+
+                <!-- Joiner Step 2 -->
+                <div id="joiner-step-2" class="hidden space-y-4">
+                    <p class="text-sm text-slate-300">Send this response back to the host:</p>
+                    <div class="flex gap-2">
+                        <div id="joiner-answer-box" class="bg-black p-3 rounded-lg text-[10px] font-mono w-full h-20 border border-slate-700 overflow-y-auto break-all text-purple-300 select-all">
+                            Generating...
+                        </div>
+                        <button onclick="copyHandshake('joiner-answer-box')" class="bg-slate-800 hover:bg-slate-700 px-4 rounded-lg flex items-center justify-center shrink-0 transition-colors">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <p class="text-center text-xs text-slate-500 animate-pulse">Waiting for host to accept...</p>
+                </div>
+            </div>
+
+            <!-- Chat Interface -->
+            <div id="chat-ui" class="hidden flex-1 flex flex-col h-full opacity-30 pointer-events-none">
+                <div id="message-list" class="flex-1 p-6 space-y-4 overflow-y-auto max-h-[450px]">
+                    <div class="h-full flex flex-col items-center justify-center text-slate-500 py-12">
+                        <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
+                            <i class="fas fa-shield-check text-green-500 text-2xl"></i>
+                        </div>
+                        <p class="font-medium text-slate-300">End-to-End Encryption Active</p>
+                        <p class="text-xs text-slate-500">Messages are sent directly between devices.</p>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-4 bg-slate-800/30 border-t border-slate-800">
+                    <div class="flex gap-2">
+                        <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 text-sm text-white">
+                        <button onclick="sendMessage()" class="bg-blue-600 hover:bg-blue-500 px-6 rounded-xl font-bold transition-all text-sm text-white">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let peerConnection;
+        let dataChannel;
+        let userRole = null;
+
+        // --- ENCODING UTILITIES ---
+        function encodeSDP(data) {
+            try {
+                const compact = JSON.stringify(data)
+                    .replace(/v=0\\r\\n/g, 'v0|')
+                    .replace(/a=candidate:/g, 'ac:')
+                    .replace(/a=fingerprint:sha-256 /g, 'fp:')
+                    .replace(/\\r\\n/g, '~');
+                return btoa(unescape(encodeURIComponent(compact)));
+            } catch (e) {
+                return JSON.stringify(data);
+            }
+        }
+
+        function decodeSDP(encoded) {
+            try {
+                const compact = decodeURIComponent(escape(atob(encoded)));
+                const jsonString = compact
+                    .replace(/v0\|/g, 'v=0\\r\\n')
+                    .replace(/ac:/g, 'a=candidate:')
+                    .replace(/fp:/g, 'a=fingerprint:sha-256 ')
+                    .replace(/~/g, '\\r\\n');
+                return JSON.parse(jsonString);
+            } catch (e) {
+                return JSON.parse(encoded);
+            }
+        }
+
+        function updateStatus(state) {
+            const badge = document.getElementById('status-badge');
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            
+            text.innerText = state.charAt(0).toUpperCase() + state.slice(1);
+            
+            if (state === 'connected') {
+                badge.className = "px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-green-500/10 border-green-500 text-green-400";
+                dot.className = "w-2 h-2 rounded-full bg-green-500 animate-pulse";
+                document.getElementById('handshake-ui').classList.add('hidden');
+                document.getElementById('chat-ui').classList.remove('hidden', 'opacity-30', 'pointer-events-none');
+            } else {
+                badge.className = "px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-red-500/10 border-red-500 text-red-400";
+                dot.className = "w-2 h-2 rounded-full bg-red-500";
+            }
+        }
+
+        function initPC() {
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            };
+            peerConnection = new RTCPeerConnection(configuration);
+            peerConnection.oniceconnectionstatechange = () => updateStatus(peerConnection.iceConnectionState);
+        }
+
+        function setupDataChannel(channel) {
+            dataChannel = channel;
+            dataChannel.onopen = () => updateStatus('connected');
+            dataChannel.onmessage = (e) => addMessage('peer', e.data);
+        }
+
+        // --- HOST FLOW ---
+        async function startAsHost() {
+            userRole = 'host';
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-container').classList.remove('hidden');
+            document.getElementById('host-step-1').classList.remove('hidden');
+            
+            initPC();
+            const channel = peerConnection.createDataChannel('chat');
+            setupDataChannel(channel);
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            // Wait for ICE candidates (timeout fallback)
+            let finished = false;
+            const finalize = () => {
+                if(finished) return;
+                finished = true;
+                const encoded = encodeSDP(peerConnection.localDescription);
+                document.getElementById('host-offer-box').innerText = encoded;
+                document.getElementById('host-next-btn').disabled = false;
+            };
+
+            peerConnection.onicecandidate = (e) => { if (!e.candidate) finalize(); };
+            setTimeout(finalize, 3000);
+        }
+
+        function goToStep(step) {
+            document.getElementById('host-step-1').classList.add('hidden');
+            document.getElementById('host-step-2').classList.remove('hidden');
+            document.getElementById('step-indicator').innerText = 'Step 2';
+        }
+
+        async function handleHostApplyAnswer() {
+            const code = document.getElementById('host-answer-input').value;
+            try {
+                const sdp = decodeSDP(code);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            } catch (e) {
+                alert("Invalid code format.");
+            }
+        }
+
+        // --- JOINER FLOW ---
+        function startAsJoiner() {
+            userRole = 'joiner';
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-container').classList.remove('hidden');
+            document.getElementById('joiner-step-1').classList.remove('hidden');
+            initPC();
+            peerConnection.ondatachannel = (e) => setupDataChannel(e.channel);
+        }
+
+        async function handleJoinerApplyOffer() {
+            const code = document.getElementById('joiner-offer-input').value;
+            try {
+                const sdp = decodeSDP(code);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                document.getElementById('joiner-step-1').classList.add('hidden');
+                document.getElementById('joiner-step-2').classList.remove('hidden');
+                document.getElementById('step-indicator').innerText = 'Step 2';
+
+                let finished = false;
+                const finalize = () => {
+                    if(finished) return;
+                    finished = true;
+                    document.getElementById('joiner-answer-box').innerText = encodeSDP(peerConnection.localDescription);
+                };
+                peerConnection.onicecandidate = (e) => { if (!e.candidate) finalize(); };
+                setTimeout(finalize, 3000);
+            } catch (e) {
+                alert("Invalid code format.");
+            }
+        }
+
+        // --- CHAT LOGIC ---
+        function addMessage(sender, text) {
+            const list = document.getElementById('message-list');
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            // Remove empty state if first message
+            if (list.querySelector('.py-12')) list.innerHTML = '';
+
+            const div = document.createElement('div');
+            div.className = `flex ${sender === 'me' ? 'justify-end' : 'justify-start'}`;
+            div.innerHTML = `
+                <div class="max-w-[80%] rounded-2xl px-4 py-2 ${sender === 'me' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700 shadow-lg'}">
+                    <p class="text-sm">${text}</p>
+                    <span class="text-[9px] opacity-40 mt-1 block text-right">${time}</span>
+                </div>
+            `;
+            list.appendChild(div);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if (msg && dataChannel && dataChannel.readyState === 'open') {
+                dataChannel.send(msg);
+                addMessage('me', msg);
+                input.value = '';
+            }
+        }
+
+        function copyHandshake(id) {
+            const text = document.getElementById(id).innerText;
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            const btn = event.currentTarget;
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check text-green-400"></i>';
+            setTimeout(() => btn.innerHTML = originalIcon, 2000);
+        }
+
+        // Enter key to send
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

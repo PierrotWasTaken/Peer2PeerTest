@@ -102,7 +102,11 @@
                             <i class="fas fa-copy"></i>
                         </button>
                     </div>
-                    <p class="text-center text-xs text-slate-500 animate-pulse">Waiting for host to accept...</p>
+                    <div class="mt-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <p class="text-center text-xs text-slate-300">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Waiting for host to complete the connection...
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -171,14 +175,22 @@
             
             text.innerText = state.charAt(0).toUpperCase() + state.slice(1);
             
-            if (state === 'connected') {
+            // Handle multiple valid 'connected' states
+            if (state === 'connected' || state === 'completed') {
                 badge.className = "px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-green-500/10 border-green-500 text-green-400";
                 dot.className = "w-2 h-2 rounded-full bg-green-500 animate-pulse";
+                
+                // Switch UI to chat mode
                 document.getElementById('handshake-ui').classList.add('hidden');
                 document.getElementById('chat-ui').classList.remove('hidden', 'opacity-30', 'pointer-events-none');
             } else {
                 badge.className = "px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-red-500/10 border-red-500 text-red-400";
                 dot.className = "w-2 h-2 rounded-full bg-red-500";
+                
+                // If we lose connection, show the handshake UI again if not already connected
+                if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+                   // Optional: reset app or show error
+                }
             }
         }
 
@@ -197,6 +209,7 @@
             dataChannel = channel;
             dataChannel.onopen = () => updateStatus('connected');
             dataChannel.onmessage = (e) => addMessage('peer', e.data);
+            dataChannel.onclose = () => updateStatus('disconnected');
         }
 
         // --- HOST FLOW ---
@@ -239,7 +252,7 @@
                 const sdp = decodeSDP(code);
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
             } catch (e) {
-                alert("Invalid code format.");
+                alert("Invalid code format. Make sure you copied the whole string.");
             }
         }
 
@@ -255,12 +268,15 @@
 
         async function handleJoinerApplyOffer() {
             const code = document.getElementById('joiner-offer-input').value;
+            if (!code) return;
+
             try {
                 const sdp = decodeSDP(code);
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
 
+                // Show Step 2 UI for Joiner
                 document.getElementById('joiner-step-1').classList.add('hidden');
                 document.getElementById('joiner-step-2').classList.remove('hidden');
                 document.getElementById('step-indicator').innerText = 'Step 2';
@@ -274,7 +290,7 @@
                 peerConnection.onicecandidate = (e) => { if (!e.candidate) finalize(); };
                 setTimeout(finalize, 3000);
             } catch (e) {
-                alert("Invalid code format.");
+                alert("Invalid code format. Make sure you copied the whole string.");
             }
         }
 
@@ -310,6 +326,8 @@
 
         function copyHandshake(id) {
             const text = document.getElementById(id).innerText;
+            if (text.includes('...')) return; // Don't copy while generating
+            
             const el = document.createElement('textarea');
             el.value = text;
             document.body.appendChild(el);

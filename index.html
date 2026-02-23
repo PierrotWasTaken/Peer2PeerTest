@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compact P2P Messenger</title>
+    <title>P2P Group Messenger</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -11,123 +11,82 @@
         .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .peer-tag { font-family: monospace; font-size: 0.7rem; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
 
     <div class="max-w-4xl mx-auto p-4 md:p-8">
         <!-- Header -->
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-800 pb-6">
             <div>
                 <h1 class="text-3xl font-bold flex items-center gap-2">
-                    <i class="fas fa-bolt text-yellow-400"></i> Compact P2P Messenger
+                    <i class="fas fa-layer-group text-blue-400"></i> P2P Group Chat
                 </h1>
-                <p class="text-slate-400 mt-1 text-sm">Direct browser-to-browser connection via WebRTC.</p>
+                <div class="flex items-center gap-2 mt-1">
+                    <span id="my-id-display" class="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 font-mono">Identifying...</span>
+                    <span class="text-slate-500 text-xs">• Serverless • Peer-to-Peer</span>
+                </div>
             </div>
-            <div id="status-badge" class="px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-red-500/10 border-red-500 text-red-400">
-                <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></div>
-                Status: <span id="status-text">Disconnected</span>
+            <div id="connection-count" class="px-4 py-1 rounded-full text-xs font-medium border bg-slate-900 border-slate-700 text-slate-400 flex items-center gap-2">
+                <i class="fas fa-users"></i> Connected: <span id="peer-count">0</span>
             </div>
         </header>
 
-        <!-- Role Selection -->
-        <div id="setup-screen" class="grid grid-cols-1 md:grid-cols-2 gap-6 py-12">
-            <button onclick="startAsHost()" class="p-8 bg-slate-900 border border-slate-800 rounded-2xl hover:border-blue-500 transition-all text-left group">
-                <div class="bg-blue-500/20 p-3 rounded-lg w-fit mb-4 group-hover:bg-blue-500/40 transition-colors">
-                    <i class="fas fa-share-nodes text-blue-400 text-xl"></i>
-                </div>
-                <h3 class="text-xl font-bold mb-2 text-white">Host</h3>
-                <p class="text-slate-400">Create a short code for a friend.</p>
-            </button>
-            <button onclick="startAsJoiner()" class="p-8 bg-slate-900 border border-slate-800 rounded-2xl hover:border-purple-500 transition-all text-left group">
-                <div class="bg-purple-500/20 p-3 rounded-lg w-fit mb-4 group-hover:bg-purple-500/40 transition-colors">
-                    <i class="fas fa-user-plus text-purple-400 text-xl"></i>
-                </div>
-                <h3 class="text-xl font-bold mb-2 text-white">Join</h3>
-                <p class="text-slate-400">Enter a short code to connect.</p>
-            </button>
-        </div>
-
-        <!-- Connection UI -->
-        <div id="main-container" class="hidden bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[500px] flex flex-col shadow-2xl">
-            
-            <!-- Handshake Steps -->
-            <div id="handshake-ui" class="p-6 border-b border-slate-800 bg-slate-900/50">
-                <div class="flex items-center gap-2 text-blue-400 mb-4 text-[10px] font-bold uppercase tracking-widest">
-                    <i class="fas fa-shield-halved"></i> Secure Handshake: <span id="step-indicator">Step 1</span>
-                </div>
-
-                <!-- Host Step 1 -->
-                <div id="host-step-1" class="hidden space-y-4">
-                    <p class="text-sm text-slate-300">Copy this short connection code and send it to your friend:</p>
-                    <div class="flex gap-2">
-                        <div id="host-offer-box" class="bg-black p-3 rounded-lg text-[10px] font-mono w-full h-20 border border-slate-700 overflow-y-auto break-all text-blue-300 select-all">
-                            Gathering network data...
-                        </div>
-                        <button onclick="copyHandshake('host-offer-box')" class="bg-slate-800 hover:bg-slate-700 px-4 rounded-lg flex items-center justify-center shrink-0 transition-colors">
-                            <i class="fas fa-copy"></i>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Panel: Connection Tools -->
+            <div class="space-y-4">
+                <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+                    <h3 class="text-sm font-bold mb-4 uppercase tracking-wider text-slate-400">Invite Someone</h3>
+                    <p class="text-xs text-slate-500 mb-3">Generate a code and send it to a friend.</p>
+                    <button onclick="createOffer()" id="gen-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-2.5 rounded-xl font-bold transition-all text-sm mb-3">
+                        Generate Invite Code
+                    </button>
+                    
+                    <div id="offer-display" class="hidden space-y-2">
+                        <div id="offer-box" class="bg-black p-3 rounded-lg text-[10px] font-mono h-24 border border-slate-700 overflow-y-auto break-all text-blue-300 select-all"></div>
+                        <button onclick="copyText('offer-box')" class="w-full bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-xs flex items-center justify-center gap-2">
+                            <i class="fas fa-copy"></i> Copy Invite
                         </button>
                     </div>
-                    <button id="host-next-btn" disabled onclick="goToStep(2)" class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 py-3 rounded-xl font-bold transition-all text-white">
-                        I've sent it, now wait for Answer
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+                    <h3 class="text-sm font-bold mb-4 uppercase tracking-wider text-slate-400">Join a Friend</h3>
+                    <textarea id="remote-input" placeholder="Paste invite or response code here..." class="bg-black p-3 rounded-lg text-xs font-mono w-full h-24 border border-slate-700 focus:border-blue-500 focus:outline-none text-purple-300 mb-3"></textarea>
+                    <button onclick="handleRemoteCode()" class="w-full bg-purple-600 hover:bg-purple-500 py-2.5 rounded-xl font-bold transition-all text-sm">
+                        Connect / Respond
                     </button>
                 </div>
 
-                <!-- Host Step 2 -->
-                <div id="host-step-2" class="hidden space-y-4">
-                    <p class="text-sm text-slate-300">Paste your friend's response code:</p>
-                    <textarea id="host-answer-input" placeholder="Paste response code here..." class="bg-black p-3 rounded-lg text-xs font-mono w-full h-20 border border-slate-700 focus:border-blue-500 focus:outline-none text-purple-300"></textarea>
-                    <button onclick="handleHostApplyAnswer()" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl font-bold transition-all text-white">
-                        Link Browsers
+                <div id="response-area" class="hidden bg-slate-900 border border-purple-500/50 p-5 rounded-2xl shadow-xl animate-pulse">
+                    <h3 class="text-sm font-bold mb-2 text-purple-400">Send Response Back!</h3>
+                    <p class="text-[10px] text-slate-400 mb-3">Your friend needs this code to finish the link:</p>
+                    <div id="response-box" class="bg-black p-3 rounded-lg text-[10px] font-mono h-24 border border-slate-700 overflow-y-auto break-all text-purple-300 select-all mb-2"></div>
+                    <button onclick="copyText('response-box')" class="w-full bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-xs flex items-center justify-center gap-2">
+                        <i class="fas fa-copy"></i> Copy Response
                     </button>
-                </div>
-
-                <!-- Joiner Step 1 -->
-                <div id="joiner-step-1" class="hidden space-y-4">
-                    <p class="text-sm text-slate-300">Paste the host's connection code:</p>
-                    <textarea id="joiner-offer-input" placeholder="Paste short code here..." class="bg-black p-3 rounded-lg text-xs font-mono w-full h-20 border border-slate-700 focus:border-purple-500 focus:outline-none text-blue-300"></textarea>
-                    <button onclick="handleJoinerApplyOffer()" class="w-full bg-purple-600 hover:bg-purple-500 py-3 rounded-xl font-bold transition-all text-white">
-                        Generate Response
-                    </button>
-                </div>
-
-                <!-- Joiner Step 2 -->
-                <div id="joiner-step-2" class="hidden space-y-4">
-                    <p class="text-sm text-slate-300">Send this response back to the host:</p>
-                    <div class="flex gap-2">
-                        <div id="joiner-answer-box" class="bg-black p-3 rounded-lg text-[10px] font-mono w-full h-20 border border-slate-700 overflow-y-auto break-all text-purple-300 select-all">
-                            Generating...
-                        </div>
-                        <button onclick="copyHandshake('joiner-answer-box')" class="bg-slate-800 hover:bg-slate-700 px-4 rounded-lg flex items-center justify-center shrink-0 transition-colors">
-                            <i class="fas fa-copy"></i>
-                        </button>
-                    </div>
-                    <div class="mt-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                        <p class="text-center text-xs text-slate-300">
-                            <i class="fas fa-spinner fa-spin mr-2"></i>Waiting for host to complete the connection...
-                        </p>
-                    </div>
                 </div>
             </div>
 
-            <!-- Chat Interface -->
-            <div id="chat-ui" class="hidden flex-1 flex flex-col h-full opacity-30 pointer-events-none">
-                <div id="message-list" class="flex-1 p-6 space-y-4 overflow-y-auto max-h-[450px]">
-                    <div class="h-full flex flex-col items-center justify-center text-slate-500 py-12">
-                        <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-shield-check text-green-500 text-2xl"></i>
+            <!-- Right Panel: Chat -->
+            <div class="lg:col-span-2 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[500px] shadow-2xl">
+                <div id="message-list" class="flex-1 p-6 space-y-4 overflow-y-auto h-[400px]">
+                    <div class="h-full flex flex-col items-center justify-center text-slate-500 py-12 text-center">
+                        <div class="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
+                            <i class="fas fa-comments text-blue-500 text-2xl"></i>
                         </div>
-                        <p class="font-medium text-slate-300">End-to-End Encryption Active</p>
-                        <p class="text-xs text-slate-500">Messages are sent directly between devices.</p>
+                        <p class="font-medium text-slate-300">No messages yet</p>
+                        <p class="text-xs text-slate-500 max-w-[200px] mt-2">Connect with a friend using the tools on the left to start chatting.</p>
                     </div>
                 </div>
 
-                <!-- Input Area -->
                 <div class="p-4 bg-slate-800/30 border-t border-slate-800">
                     <div class="flex gap-2">
-                        <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 text-sm text-white">
-                        <button onclick="sendMessage()" class="bg-blue-600 hover:bg-blue-500 px-6 rounded-xl font-bold transition-all text-sm text-white">
-                            Send
+                        <input id="chat-input" type="text" placeholder="Type a message to the group..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 text-sm text-white">
+                        <button onclick="sendGroupMessage()" class="bg-blue-600 hover:bg-blue-500 px-6 rounded-xl font-bold transition-all text-sm text-white flex items-center gap-2">
+                            <span>Send</span>
+                            <i class="fas fa-paper-plane text-[10px]"></i>
                         </button>
                     </div>
                 </div>
@@ -136,198 +95,177 @@
     </div>
 
     <script>
-        let peerConnection;
-        let dataChannel;
-        let userRole = null;
+        const myId = "Peer-" + Math.floor(Math.random() * 9000 + 1000);
+        document.getElementById('my-id-display').innerText = "Me: " + myId;
 
-        // --- ENCODING UTILITIES ---
+        const connections = {}; // Stores { peerId: { pc, dc } }
+        let pendingPC = null; // Temporary PC for the current handshake
+
+        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+
+        // --- ENCODING ---
         function encodeSDP(data) {
-            try {
-                const compact = JSON.stringify(data)
-                    .replace(/v=0\\r\\n/g, 'v0|')
-                    .replace(/a=candidate:/g, 'ac:')
-                    .replace(/a=fingerprint:sha-256 /g, 'fp:')
-                    .replace(/\\r\\n/g, '~');
-                return btoa(unescape(encodeURIComponent(compact)));
-            } catch (e) {
-                return JSON.stringify(data);
-            }
+            const compact = JSON.stringify(data).replace(/v=0\\r\\n/g, 'v0|').replace(/a=candidate:/g, 'ac:').replace(/a=fingerprint:sha-256 /g, 'fp:').replace(/\\r\\n/g, '~');
+            return btoa(unescape(encodeURIComponent(compact)));
         }
 
         function decodeSDP(encoded) {
-            try {
-                const compact = decodeURIComponent(escape(atob(encoded)));
-                const jsonString = compact
-                    .replace(/v0\|/g, 'v=0\\r\\n')
-                    .replace(/ac:/g, 'a=candidate:')
-                    .replace(/fp:/g, 'a=fingerprint:sha-256 ')
-                    .replace(/~/g, '\\r\\n');
-                return JSON.parse(jsonString);
-            } catch (e) {
-                return JSON.parse(encoded);
-            }
+            const compact = decodeURIComponent(escape(atob(encoded)));
+            const jsonString = compact.replace(/v0\|/g, 'v=0\\r\\n').replace(/ac:/g, 'a=candidate:').replace(/fp:/g, 'a=fingerprint:sha-256 ').replace(/~/g, '\\r\\n');
+            return JSON.parse(jsonString);
         }
 
-        function updateStatus(state) {
-            const badge = document.getElementById('status-badge');
-            const dot = document.getElementById('status-dot');
-            const text = document.getElementById('status-text');
-            
-            text.innerText = state.charAt(0).toUpperCase() + state.slice(1);
-            
-            // Handle multiple valid 'connected' states
-            if (state === 'connected' || state === 'completed') {
-                badge.className = "px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-green-500/10 border-green-500 text-green-400";
-                dot.className = "w-2 h-2 rounded-full bg-green-500 animate-pulse";
-                
-                // Switch UI to chat mode
-                document.getElementById('handshake-ui').classList.add('hidden');
-                document.getElementById('chat-ui').classList.remove('hidden', 'opacity-30', 'pointer-events-none');
-            } else {
-                badge.className = "px-4 py-1 rounded-full text-xs font-medium border flex items-center gap-2 bg-red-500/10 border-red-500 text-red-400";
-                dot.className = "w-2 h-2 rounded-full bg-red-500";
-                
-                // If we lose connection, show the handshake UI again if not already connected
-                if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-                   // Optional: reset app or show error
+        // --- CONNECTION LOGIC ---
+        function createPC(peerId = null) {
+            const pc = new RTCPeerConnection(iceConfig);
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === 'connected') {
+                    document.getElementById('response-area').classList.add('hidden');
+                    updatePeerCount();
                 }
-            }
-        }
-
-        function initPC() {
-            const configuration = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
+                if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+                    if (peerId) delete connections[peerId];
+                    updatePeerCount();
+                }
             };
-            peerConnection = new RTCPeerConnection(configuration);
-            peerConnection.oniceconnectionstatechange = () => updateStatus(peerConnection.iceConnectionState);
+            return pc;
         }
 
-        function setupDataChannel(channel) {
-            dataChannel = channel;
-            dataChannel.onopen = () => updateStatus('connected');
-            dataChannel.onmessage = (e) => addMessage('peer', e.data);
-            dataChannel.onclose = () => updateStatus('disconnected');
+        function setupDC(dc, peerId) {
+            dc.onopen = () => {
+                // Identify ourself to the new peer
+                dc.send(JSON.stringify({ type: 'identity', id: myId }));
+                updatePeerCount();
+            };
+            dc.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'identity') {
+                    connections[data.id] = { pc: dc.pc, dc: dc };
+                    addSystemMessage(`${data.id} joined the chat.`);
+                    updatePeerCount();
+                } else if (data.type === 'chat') {
+                    addChatMessage(data.sender, data.text);
+                }
+            };
         }
 
-        // --- HOST FLOW ---
-        async function startAsHost() {
-            userRole = 'host';
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('main-container').classList.remove('hidden');
-            document.getElementById('host-step-1').classList.remove('hidden');
+        // Action: Generate Invite
+        async function createOffer() {
+            const pc = createPC();
+            pendingPC = pc;
+            const dc = pc.createDataChannel('chat');
+            dc.pc = pc; // attach reference
+            setupDC(dc);
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            document.getElementById('gen-btn').innerText = "Gathering...";
             
-            initPC();
-            const channel = peerConnection.createDataChannel('chat');
-            setupDataChannel(channel);
-
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-
-            // Wait for ICE candidates (timeout fallback)
-            let finished = false;
-            const finalize = () => {
-                if(finished) return;
-                finished = true;
-                const encoded = encodeSDP(peerConnection.localDescription);
-                document.getElementById('host-offer-box').innerText = encoded;
-                document.getElementById('host-next-btn').disabled = false;
+            pc.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    document.getElementById('offer-box').innerText = encodeSDP(pc.localDescription);
+                    document.getElementById('offer-display').classList.remove('hidden');
+                    document.getElementById('gen-btn').innerText = "Generate Another Invite";
+                }
             };
-
-            peerConnection.onicecandidate = (e) => { if (!e.candidate) finalize(); };
-            setTimeout(finalize, 3000);
         }
 
-        function goToStep(step) {
-            document.getElementById('host-step-1').classList.add('hidden');
-            document.getElementById('host-step-2').classList.remove('hidden');
-            document.getElementById('step-indicator').innerText = 'Step 2';
-        }
-
-        async function handleHostApplyAnswer() {
-            const code = document.getElementById('host-answer-input').value;
-            try {
-                const sdp = decodeSDP(code);
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-            } catch (e) {
-                alert("Invalid code format. Make sure you copied the whole string.");
-            }
-        }
-
-        // --- JOINER FLOW ---
-        function startAsJoiner() {
-            userRole = 'joiner';
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('main-container').classList.remove('hidden');
-            document.getElementById('joiner-step-1').classList.remove('hidden');
-            initPC();
-            peerConnection.ondatachannel = (e) => setupDataChannel(e.channel);
-        }
-
-        async function handleJoinerApplyOffer() {
-            const code = document.getElementById('joiner-offer-input').value;
+        // Action: Handle Pasted Code
+        async function handleRemoteCode() {
+            const code = document.getElementById('remote-input').value.trim();
             if (!code) return;
+            const sdp = decodeSDP(code);
 
-            try {
-                const sdp = decodeSDP(code);
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-
-                // Show Step 2 UI for Joiner
-                document.getElementById('joiner-step-1').classList.add('hidden');
-                document.getElementById('joiner-step-2').classList.remove('hidden');
-                document.getElementById('step-indicator').innerText = 'Step 2';
-
-                let finished = false;
-                const finalize = () => {
-                    if(finished) return;
-                    finished = true;
-                    document.getElementById('joiner-answer-box').innerText = encodeSDP(peerConnection.localDescription);
+            if (sdp.type === 'offer') {
+                // We are responding to an invite
+                const pc = createPC();
+                pendingPC = pc;
+                pc.ondatachannel = (e) => {
+                    e.channel.pc = pc;
+                    setupDC(e.channel);
                 };
-                peerConnection.onicecandidate = (e) => { if (!e.candidate) finalize(); };
-                setTimeout(finalize, 3000);
-            } catch (e) {
-                alert("Invalid code format. Make sure you copied the whole string.");
+
+                await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                pc.onicecandidate = (e) => {
+                    if (!e.candidate) {
+                        document.getElementById('response-box').innerText = encodeSDP(pc.localDescription);
+                        document.getElementById('response-area').classList.remove('hidden');
+                        document.getElementById('remote-input').value = '';
+                    }
+                };
+            } else if (sdp.type === 'answer') {
+                // We are finalizing an invite we sent
+                if (!pendingPC) return alert("No pending connection to answer.");
+                await pendingPC.setRemoteDescription(new RTCSessionDescription(sdp));
+                document.getElementById('offer-display').classList.add('hidden');
+                document.getElementById('remote-input').value = '';
+                pendingPC = null;
             }
         }
 
-        // --- CHAT LOGIC ---
-        function addMessage(sender, text) {
-            const list = document.getElementById('message-list');
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            // Remove empty state if first message
-            if (list.querySelector('.py-12')) list.innerHTML = '';
+        // --- UI HELPERS ---
+        function updatePeerCount() {
+            const count = Object.keys(connections).length;
+            document.getElementById('peer-count').innerText = count;
+        }
 
+        function addChatMessage(sender, text) {
+            const list = document.getElementById('message-list');
+            if (list.querySelector('.text-center')) list.innerHTML = '';
+
+            const isMe = sender === myId;
             const div = document.createElement('div');
-            div.className = `flex ${sender === 'me' ? 'justify-end' : 'justify-start'}`;
+            div.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
             div.innerHTML = `
-                <div class="max-w-[80%] rounded-2xl px-4 py-2 ${sender === 'me' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700 shadow-lg'}">
-                    <p class="text-sm">${text}</p>
-                    <span class="text-[9px] opacity-40 mt-1 block text-right">${time}</span>
+                <div class="max-w-[85%]">
+                    ${!isMe ? `<div class="peer-tag text-slate-500 mb-1 ml-2">${sender}</div>` : ''}
+                    <div class="rounded-2xl px-4 py-2 ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700'}">
+                        <p class="text-sm">${text}</p>
+                    </div>
                 </div>
             `;
             list.appendChild(div);
             list.scrollTop = list.scrollHeight;
         }
 
-        function sendMessage() {
+        function addSystemMessage(text) {
+            const list = document.getElementById('message-list');
+            const div = document.createElement('div');
+            div.className = "flex justify-center my-2";
+            div.innerHTML = `<span class="text-[10px] bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">${text}</span>`;
+            list.appendChild(div);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function sendGroupMessage() {
             const input = document.getElementById('chat-input');
             const msg = input.value.trim();
-            if (msg && dataChannel && dataChannel.readyState === 'open') {
-                dataChannel.send(msg);
-                addMessage('me', msg);
-                input.value = '';
+            if (!msg) return;
+
+            const packet = JSON.stringify({ type: 'chat', sender: myId, text: msg });
+            
+            let sentCount = 0;
+            Object.values(connections).forEach(peer => {
+                if (peer.dc.readyState === 'open') {
+                    peer.dc.send(packet);
+                    sentCount++;
+                }
+            });
+
+            addChatMessage(myId, msg);
+            input.value = '';
+            
+            if (sentCount === 0) {
+                addSystemMessage("Message not sent. No one is connected yet!");
             }
         }
 
-        function copyHandshake(id) {
+        function copyText(id) {
             const text = document.getElementById(id).innerText;
-            if (text.includes('...')) return; // Don't copy while generating
-            
             const el = document.createElement('textarea');
             el.value = text;
             document.body.appendChild(el);
@@ -336,15 +274,12 @@
             document.body.removeChild(el);
             
             const btn = event.currentTarget;
-            const originalIcon = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check text-green-400"></i>';
-            setTimeout(() => btn.innerHTML = originalIcon, 2000);
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check text-green-400"></i> Copied!';
+            setTimeout(() => btn.innerHTML = original, 2000);
         }
 
-        // Enter key to send
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
+        document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendGroupMessage(); });
     </script>
 </body>
 </html>

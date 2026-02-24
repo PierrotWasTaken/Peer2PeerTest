@@ -23,12 +23,6 @@
             flex-direction: column;
         }
 
-        .chat-grid {
-            flex: 1;
-            min-height: 0;
-        }
-
-        /* Smooth transitions for UI elements */
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
@@ -82,8 +76,8 @@
                         <input id="lobby-input" type="text" placeholder="XYZ-123" 
                             class="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3 text-base focus:outline-none focus:border-blue-500 font-bold tracking-widest uppercase transition-all">
                     </div>
-                    <button id="join-btn" onclick="joinLobby()" class="bg-blue-600 hover:bg-blue-500 py-4 mt-2 rounded-2xl font-black text-lg transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50">
-                        JOIN CHAT
+                    <button id="join-btn" onclick="joinLobby()" disabled class="bg-blue-600 hover:bg-blue-500 py-4 mt-2 rounded-2xl font-black text-lg transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                        WAITING FOR CLOUD...
                     </button>
                 </div>
             </div>
@@ -96,9 +90,7 @@
                         <span><i class="fas fa-users mr-1"></i> Peers</span>
                         <span id="peer-count" class="bg-slate-800 px-2 py-0.5 rounded-full text-blue-400">1</span>
                     </div>
-                    <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-1">
-                        <!-- User list populated via JS -->
-                    </div>
+                    <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
                 </div>
 
                 <!-- Chat Area -->
@@ -121,30 +113,28 @@
                     </div>
                 </div>
             </div>
-
         </main>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Environment setup
+        // 1. Setup Config
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // Ensure the App ID is consistent across deployments (Critical for GitHub Pages)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'p2p-lobby-final';
+        // Consistent App ID is vital for Cross-Origin (GitHub Pages)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'p2p-lobby-messenger-v1';
 
         let user = null;
         let lobbyId = '';
         let myUsername = '';
         let peers = {}; 
         
-        // Robust ICE config for standard web environments
         const iceConfig = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -152,7 +142,7 @@
             ] 
         };
 
-        // Initialize Authentication
+        // 2. Auth Flow (Rule 3)
         const initAuth = async () => {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -161,21 +151,24 @@
                     await signInAnonymously(auth);
                 }
             } catch (err) {
-                console.error("Auth failed:", err);
-                document.getElementById('my-uid-display').innerText = "Auth Error - Refresh";
+                console.error("Auth Error:", err);
+                document.getElementById('my-uid-display').innerText = "Auth Failed - Check Config";
             }
         };
 
         onAuthStateChanged(auth, (u) => {
             if (u) {
                 user = u;
-                document.getElementById('my-uid-display').innerText = `ID: ${u.uid.slice(0, 8)}`;
-                document.getElementById('join-btn').disabled = false;
+                document.getElementById('my-uid-display').innerText = `ID: ${u.uid.slice(0, 10)}`;
+                const btn = document.getElementById('join-btn');
+                btn.disabled = false;
+                btn.innerText = "JOIN CHAT";
             }
         });
 
         initAuth();
 
+        // 3. Lobby Logic
         window.joinLobby = async () => {
             const lobbyInput = document.getElementById('lobby-input').value.trim().toUpperCase();
             const userInput = document.getElementById('username-input').value.trim();
@@ -193,7 +186,7 @@
 
             updateUI(); 
 
-            // 1. Announce presence in public lobby
+            // Presence (Rule 1: Path Structure)
             const presenceRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members', user.uid);
             await setDoc(presenceRef, {
                 uid: user.uid,
@@ -201,7 +194,7 @@
                 joinedAt: Date.now()
             });
 
-            // 2. Watch for other lobby members
+            // Member Tracking (Rule 1 & 2)
             const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members');
             onSnapshot(membersRef, (snapshot) => {
                 snapshot.docChanges().forEach(change => {
@@ -209,7 +202,8 @@
                     if (data.uid === user.uid) return;
 
                     if (change.type === 'added') {
-                        // Handshake logic: Newest person initiates with everyone already there
+                        // New user joined: If they are older than us, we wait for them. 
+                        // If we are newer, we initiate.
                         if (data.joinedAt < Date.now()) {
                             initiateConnection(data.uid, data.username);
                         }
@@ -221,32 +215,29 @@
                         }
                     }
                 });
-            });
+            }, (err) => console.error("Snapshot Error:", err));
 
-            // 3. Listen for incoming WebRTC signals (Offer/Answer/ICE)
+            // Signal Inbox (Rule 1: Private Path)
             const signalsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'signals');
             onSnapshot(signalsRef, (snapshot) => {
                 snapshot.docChanges().forEach(async (change) => {
                     if (change.type === 'added') {
                         const signal = change.doc.data();
                         await handleSignal(signal);
-                        await deleteDoc(change.doc.ref); // Consume signal
+                        await deleteDoc(change.doc.ref);
                     }
                 });
-            });
+            }, (err) => console.error("Signal Error:", err));
 
-            // Cleanup on browser close
             window.addEventListener('beforeunload', () => deleteDoc(presenceRef));
         };
 
-        // --- WebRTC Logic ---
-
+        // 4. WebRTC Handshake
         async function initiateConnection(peerUid, peerUsername) {
             if (peers[peerUid]) return;
 
             const pc = new RTCPeerConnection(iceConfig);
-            const dc = pc.createDataChannel('chat', { negotiated: false });
-            
+            const dc = pc.createDataChannel('chat');
             setupPeer(peerUid, pc, dc, peerUsername);
 
             const offer = await pc.createOffer();
@@ -261,11 +252,7 @@
 
             pc.onicecandidate = (e) => {
                 if (e.candidate) {
-                    sendSignal(peerUid, { 
-                        type: 'ice', 
-                        candidate: JSON.stringify(e.candidate), 
-                        from: user.uid 
-                    });
+                    sendSignal(peerUid, { type: 'ice', candidate: JSON.stringify(e.candidate), from: user.uid });
                 }
             };
         }
@@ -290,11 +277,7 @@
 
                 pc.onicecandidate = (e) => {
                     if (e.candidate) {
-                        sendSignal(signal.from, { 
-                            type: 'ice', 
-                            candidate: JSON.stringify(e.candidate), 
-                            from: user.uid 
-                        });
+                        sendSignal(signal.from, { type: 'ice', candidate: JSON.stringify(e.candidate), from: user.uid });
                     }
                 };
             } else if (signal.type === 'answer' && peer) {
@@ -302,75 +285,49 @@
             } else if (signal.type === 'ice' && peer) {
                 try {
                     await peer.pc.addIceCandidate(new RTCIceCandidate(JSON.parse(signal.candidate)));
-                } catch (e) { console.warn("ICE error", e); }
+                } catch (e) {}
             }
         }
 
         function setupPeer(uid, pc, dc, username) {
             peers[uid] = { pc, dc, username };
-            
-            dc.onopen = () => {
-                updateUI();
-                addSystemMessage(`${username} joined the chat.`);
-            };
-            
-            dc.onclose = () => {
-                addSystemMessage(`${peers[uid]?.username || 'User'} left.`);
-                delete peers[uid];
-                updateUI();
-            };
-            
+            dc.onopen = () => updateUI();
+            dc.onclose = () => { delete peers[uid]; updateUI(); };
             dc.onmessage = (e) => addMessage(uid, JSON.parse(e.data));
-
-            pc.onconnectionstatechange = () => {
-                if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                    delete peers[uid];
-                    updateUI();
-                }
-            };
         }
 
         async function sendSignal(to, data) {
             if (!user) return;
-            // Send to the destination user's private signal box
             await addDoc(collection(db, 'artifacts', appId, 'users', to, 'signals'), data);
         }
 
-        // --- Interaction Logic ---
-
+        // 5. Messaging UI
         window.broadcast = () => {
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if (!text) return;
 
-            const msg = { sender: user.uid, username: myUsername, text, time: Date.now() };
-            
-            // Send via WebRTC Data Channels
-            let sentCount = 0;
+            const msg = { sender: user.uid, username: myUsername, text };
             Object.values(peers).forEach(p => {
-                if (p.dc.readyState === 'open') {
-                    p.dc.send(JSON.stringify(msg));
-                    sentCount++;
-                }
+                if (p.dc.readyState === 'open') p.dc.send(JSON.stringify(msg));
             });
 
             addMessage('me', msg);
             input.value = '';
-            input.focus();
-        };
+        }
 
         function addMessage(uid, msg) {
             const list = document.getElementById('message-list');
             if (list.querySelector('.opacity-20')) list.innerHTML = '';
             
             const isMe = uid === 'me';
-            const name = isMe ? myUsername : (msg.username || `User-${uid.slice(0,4)}`);
+            const name = isMe ? myUsername : (msg.username || 'User');
             
             const div = document.createElement('div');
             div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} fade-in mb-4`;
             div.innerHTML = `
                 <span class="text-[9px] text-slate-500 mb-0.5 px-2 uppercase font-bold tracking-tight">${name}</span>
-                <div class="max-w-[85%] px-4 py-2 rounded-2xl text-sm leading-relaxed shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'}">
+                <div class="max-w-[85%] px-4 py-2 rounded-2xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'}">
                     ${escapeHtml(msg.text)}
                 </div>
             `;
@@ -378,35 +335,14 @@
             list.scrollTop = list.scrollHeight;
         }
 
-        function addSystemMessage(text) {
-            const list = document.getElementById('message-list');
-            const div = document.createElement('div');
-            div.className = "flex justify-center my-2";
-            div.innerHTML = `<span class="text-[10px] bg-slate-800/50 text-slate-500 px-3 py-1 rounded-full border border-slate-800/50">${text}</span>`;
-            list.appendChild(div);
-            list.scrollTop = list.scrollHeight;
-        }
-
         function updateUI() {
-            const peerList = Object.values(peers);
-            document.getElementById('peer-count').innerText = peerList.length + 1;
-            
+            document.getElementById('peer-count').innerText = Object.keys(peers).length + 1;
             const list = document.getElementById('user-list');
-            list.innerHTML = `
-                <div class="flex items-center gap-3 p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                    <div class="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold">ME</div>
-                    <span class="text-sm font-bold truncate">${myUsername}</span>
-                </div>
-            `;
-            
-            peerList.forEach(p => {
+            list.innerHTML = `<div class="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-sm font-bold truncate">ME: ${myUsername}</div>`;
+            Object.values(peers).forEach(p => {
                 const div = document.createElement('div');
-                div.className = "flex items-center gap-3 p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50";
-                div.innerHTML = `
-                    <div class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center text-[10px]"><i class="fas fa-user"></i></div>
-                    <span class="text-sm font-medium truncate">${p.username || 'Connecting...'}</span>
-                    <div class="ml-auto w-1.5 h-1.5 rounded-full ${p.dc.readyState === 'open' ? 'bg-green-500' : 'bg-yellow-500'}"></div>
-                `;
+                div.className = "p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50 text-sm truncate flex justify-between items-center";
+                div.innerHTML = `<span>${p.username || 'User'}</span><div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>`;
                 list.appendChild(div);
             });
         }

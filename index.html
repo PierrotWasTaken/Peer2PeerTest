@@ -2,284 +2,299 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Group Messenger</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Auto-Mesh Lobby Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        .hidden { display: none; }
-        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); }
-        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        .peer-tag { font-family: monospace; font-size: 0.7rem; }
+        .hidden { display: none !important; }
+        
+        /* Ensure the body doesn't scroll and takes full height */
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            overflow: hidden; 
+        }
+        
+        /* Main application container to fill screen */
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-grid {
+            flex: 1;
+            min-height: 0; /* Critical for nested flex scrolling */
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+<body class="bg-slate-950 text-slate-100 font-sans">
 
-    <div class="max-w-4xl mx-auto p-4 md:p-8">
+    <div class="app-container p-4 md:p-6 lg:p-8">
         <!-- Header -->
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-800 pb-6">
-            <div>
-                <h1 class="text-3xl font-bold flex items-center gap-2">
-                    <i class="fas fa-layer-group text-blue-400"></i> P2P Group Chat
-                </h1>
-                <div class="flex items-center gap-2 mt-1">
-                    <span id="my-id-display" class="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 font-mono">Identifying...</span>
-                    <span class="text-slate-500 text-xs">• Serverless • Peer-to-Peer</span>
+        <header class="flex flex-none justify-between items-center mb-6 bg-slate-900 p-4 md:p-6 rounded-3xl border border-slate-800 shadow-xl">
+            <div class="flex items-center gap-4">
+                <div class="bg-blue-600 p-2 md:p-3 rounded-2xl shadow-lg shadow-blue-500/20">
+                    <i class="fas fa-bolt text-white text-lg md:text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black tracking-tight">AUTO-MESH</h1>
+                    <p id="my-uid-display" class="text-[10px] text-slate-400 font-mono">Connecting...</p>
                 </div>
             </div>
-            <div id="connection-count" class="px-4 py-1 rounded-full text-xs font-medium border bg-slate-900 border-slate-700 text-slate-400 flex items-center gap-2">
-                <i class="fas fa-users"></i> Connected: <span id="peer-count">0</span>
+
+            <div id="lobby-active-controls" class="hidden flex items-center gap-2 md:gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-slate-800 rounded-xl border border-slate-700">
+                    <i class="fas fa-hashtag text-blue-400 text-xs md:text-sm"></i>
+                    <span id="active-lobby-name" class="font-bold text-blue-100 uppercase tracking-widest text-xs md:text-sm">NONE</span>
+                </div>
+                <button onclick="location.reload()" class="p-2 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-lg transition-colors">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Panel: Connection Tools -->
-            <div class="space-y-4">
-                <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
-                    <h3 class="text-sm font-bold mb-4 uppercase tracking-wider text-slate-400">Invite Someone</h3>
-                    <p class="text-xs text-slate-500 mb-3">Generate a code and send it to a friend.</p>
-                    <button onclick="createOffer()" id="gen-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-2.5 rounded-xl font-bold transition-all text-sm mb-3">
-                        Generate Invite Code
-                    </button>
-                    
-                    <div id="offer-display" class="hidden space-y-2">
-                        <div id="offer-box" class="bg-black p-3 rounded-lg text-[10px] font-mono h-24 border border-slate-700 overflow-y-auto break-all text-blue-300 select-all"></div>
-                        <button onclick="copyText('offer-box')" class="w-full bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-xs flex items-center justify-center gap-2">
-                            <i class="fas fa-copy"></i> Copy Invite
-                        </button>
+        <!-- Main Content Area -->
+        <main class="flex-1 min-h-0 relative">
+            
+            <!-- Setup Screen (Centered in Main) -->
+            <div id="setup-screen" class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <div class="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mb-6 border border-slate-800 shadow-2xl">
+                    <i class="fas fa-shield-alt text-3xl text-blue-500"></i>
+                </div>
+                <h2 class="text-3xl font-black mb-2 tracking-tight uppercase">Join Lobby</h2>
+                <p class="text-slate-400 max-w-sm mb-8 text-sm">
+                    Direct browser-to-browser encrypted messaging.
+                </p>
+                <div class="flex flex-col w-full max-w-sm gap-4">
+                    <div class="space-y-1 text-left">
+                        <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">Display Name</label>
+                        <input id="username-input" type="text" placeholder="Your Name" maxlength="15"
+                            class="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3 text-base focus:outline-none focus:border-blue-500 font-bold">
                     </div>
-                </div>
-
-                <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
-                    <h3 class="text-sm font-bold mb-4 uppercase tracking-wider text-slate-400">Join a Friend</h3>
-                    <textarea id="remote-input" placeholder="Paste invite or response code here..." class="bg-black p-3 rounded-lg text-xs font-mono w-full h-24 border border-slate-700 focus:border-blue-500 focus:outline-none text-purple-300 mb-3"></textarea>
-                    <button onclick="handleRemoteCode()" class="w-full bg-purple-600 hover:bg-purple-500 py-2.5 rounded-xl font-bold transition-all text-sm">
-                        Connect / Respond
-                    </button>
-                </div>
-
-                <div id="response-area" class="hidden bg-slate-900 border border-purple-500/50 p-5 rounded-2xl shadow-xl animate-pulse">
-                    <h3 class="text-sm font-bold mb-2 text-purple-400">Send Response Back!</h3>
-                    <p class="text-[10px] text-slate-400 mb-3">Your friend needs this code to finish the link:</p>
-                    <div id="response-box" class="bg-black p-3 rounded-lg text-[10px] font-mono h-24 border border-slate-700 overflow-y-auto break-all text-purple-300 select-all mb-2"></div>
-                    <button onclick="copyText('response-box')" class="w-full bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-xs flex items-center justify-center gap-2">
-                        <i class="fas fa-copy"></i> Copy Response
+                    <div class="space-y-1 text-left">
+                        <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">Lobby Code</label>
+                        <input id="lobby-input" type="text" placeholder="ROOM-XYZ" 
+                            class="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3 text-base focus:outline-none focus:border-blue-500 font-bold tracking-widest uppercase">
+                    </div>
+                    <button onclick="joinLobby()" class="bg-blue-600 hover:bg-blue-500 py-4 mt-2 rounded-2xl font-black text-lg transition-all shadow-xl shadow-blue-600/20">
+                        CONNECT
                     </button>
                 </div>
             </div>
 
-            <!-- Right Panel: Chat -->
-            <div class="lg:col-span-2 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden min-h-[500px] shadow-2xl">
-                <div id="message-list" class="flex-1 p-6 space-y-4 overflow-y-auto h-[400px]">
-                    <div class="h-full flex flex-col items-center justify-center text-slate-500 py-12 text-center">
-                        <div class="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
-                            <i class="fas fa-comments text-blue-500 text-2xl"></i>
+            <!-- Chat Screen (Full Height Grid) -->
+            <div id="chat-screen" class="hidden grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+                <!-- Sidebar -->
+                <div class="hidden lg:flex lg:col-span-1 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
+                    <div class="p-4 border-b border-slate-800 flex items-center gap-2 font-bold text-xs uppercase tracking-widest text-slate-500">
+                        <i class="fas fa-users"></i> Online (<span id="peer-count">1</span>)
+                    </div>
+                    <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+                        <!-- User entries -->
+                    </div>
+                </div>
+
+                <!-- Chat Area -->
+                <div class="lg:col-span-3 bg-slate-900 rounded-3xl border border-slate-800 flex flex-col overflow-hidden shadow-2xl">
+                    <div id="message-list" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-600 space-y-4">
+                            <i class="fas fa-comments text-4xl"></i>
+                            <p class="text-sm">Lobby is ready for messages.</p>
                         </div>
-                        <p class="font-medium text-slate-300">No messages yet</p>
-                        <p class="text-xs text-slate-500 max-w-[200px] mt-2">Connect with a friend using the tools on the left to start chatting.</p>
                     </div>
-                </div>
 
-                <div class="p-4 bg-slate-800/30 border-t border-slate-800">
-                    <div class="flex gap-2">
-                        <input id="chat-input" type="text" placeholder="Type a message to the group..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 text-sm text-white">
-                        <button onclick="sendGroupMessage()" class="bg-blue-600 hover:bg-blue-500 px-6 rounded-xl font-bold transition-all text-sm text-white flex items-center gap-2">
-                            <span>Send</span>
-                            <i class="fas fa-paper-plane text-[10px]"></i>
-                        </button>
+                    <div class="p-4 bg-slate-900 border-t border-slate-800">
+                        <div class="flex gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                            <input id="message-input" type="text" placeholder="Type a message..." 
+                                class="flex-1 bg-transparent px-4 py-2 text-sm focus:outline-none">
+                            <button onclick="broadcast()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-xl transition-all">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+        </main>
     </div>
 
-    <script>
-        const myId = "Peer-" + Math.floor(Math.random() * 9000 + 1000);
-        document.getElementById('my-id-display').innerText = "Me: " + myId;
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const connections = {}; // Stores { peerId: { pc, dc } }
-        let pendingPC = null; // Temporary PC for the current handshake
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'p2p-lobby-fullscreen';
 
-        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+        let user = null;
+        let lobbyId = '';
+        let myUsername = '';
+        let peers = {}; 
+        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-        // --- ENCODING ---
-        function encodeSDP(data) {
-            const compact = JSON.stringify(data).replace(/v=0\\r\\n/g, 'v0|').replace(/a=candidate:/g, 'ac:').replace(/a=fingerprint:sha-256 /g, 'fp:').replace(/\\r\\n/g, '~');
-            return btoa(unescape(encodeURIComponent(compact)));
-        }
+        const initAuth = async () => {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+        };
 
-        function decodeSDP(encoded) {
-            const compact = decodeURIComponent(escape(atob(encoded)));
-            const jsonString = compact.replace(/v0\|/g, 'v=0\\r\\n').replace(/ac:/g, 'a=candidate:').replace(/fp:/g, 'a=fingerprint:sha-256 ').replace(/~/g, '\\r\\n');
-            return JSON.parse(jsonString);
-        }
+        onAuthStateChanged(auth, (u) => {
+            if (u) {
+                user = u;
+                document.getElementById('my-uid-display').innerText = `ID: ${u.uid.slice(0, 12)}...`;
+            }
+        });
 
-        // --- CONNECTION LOGIC ---
-        function createPC(peerId = null) {
+        initAuth();
+
+        window.joinLobby = async () => {
+            const lobbyInput = document.getElementById('lobby-input').value.trim().toUpperCase();
+            const userInput = document.getElementById('username-input').value.trim();
+            
+            if (!lobbyInput || !userInput || !user) return;
+
+            lobbyId = lobbyInput;
+            myUsername = userInput;
+
+            document.getElementById('active-lobby-name').innerText = lobbyId;
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('lobby-active-controls').classList.remove('hidden');
+            document.getElementById('chat-screen').classList.remove('hidden');
+
+            updateUI(); 
+
+            const presenceRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members', user.uid);
+            await setDoc(presenceRef, {
+                uid: user.uid,
+                username: myUsername,
+                joinedAt: Date.now()
+            });
+
+            const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members');
+            onSnapshot(membersRef, (snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    const data = change.doc.data();
+                    if (change.type === 'added' && data.uid !== user.uid) {
+                        if (data.joinedAt < Date.now()) {
+                            initiateConnection(data.uid, data.username);
+                        }
+                    }
+                }, (error) => {});
+            });
+
+            const signalsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'signals');
+            onSnapshot(signalsRef, (snapshot) => {
+                snapshot.docChanges().forEach(async (change) => {
+                    if (change.type === 'added') {
+                        const signal = change.doc.data();
+                        await handleSignal(signal);
+                        await deleteDoc(change.doc.ref);
+                    }
+                }, (error) => {});
+            });
+
+            window.addEventListener('beforeunload', () => deleteDoc(presenceRef));
+        };
+
+        async function initiateConnection(peerUid, peerUsername) {
+            if (peers[peerUid]) return;
             const pc = new RTCPeerConnection(iceConfig);
-            pc.oniceconnectionstatechange = () => {
-                if (pc.iceConnectionState === 'connected') {
-                    document.getElementById('response-area').classList.add('hidden');
-                    updatePeerCount();
-                }
-                if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-                    if (peerId) delete connections[peerId];
-                    updatePeerCount();
-                }
-            };
-            return pc;
-        }
-
-        function setupDC(dc, peerId) {
-            dc.onopen = () => {
-                // Identify ourself to the new peer
-                dc.send(JSON.stringify({ type: 'identity', id: myId }));
-                updatePeerCount();
-            };
-            dc.onmessage = (e) => {
-                const data = JSON.parse(e.data);
-                if (data.type === 'identity') {
-                    connections[data.id] = { pc: dc.pc, dc: dc };
-                    addSystemMessage(`${data.id} joined the chat.`);
-                    updatePeerCount();
-                } else if (data.type === 'chat') {
-                    addChatMessage(data.sender, data.text);
-                }
-            };
-        }
-
-        // Action: Generate Invite
-        async function createOffer() {
-            const pc = createPC();
-            pendingPC = pc;
             const dc = pc.createDataChannel('chat');
-            dc.pc = pc; // attach reference
-            setupDC(dc);
-
+            setupPeer(peerUid, pc, dc, peerUsername);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-
-            document.getElementById('gen-btn').innerText = "Gathering...";
-            
-            pc.onicecandidate = (e) => {
-                if (!e.candidate) {
-                    document.getElementById('offer-box').innerText = encodeSDP(pc.localDescription);
-                    document.getElementById('offer-display').classList.remove('hidden');
-                    document.getElementById('gen-btn').innerText = "Generate Another Invite";
-                }
-            };
+            await sendSignal(peerUid, { type: 'offer', sdp: pc.localDescription.sdp, from: user.uid, username: myUsername });
+            pc.onicecandidate = (e) => { if (e.candidate) sendSignal(peerUid, { type: 'ice', candidate: JSON.stringify(e.candidate), from: user.uid }); };
         }
 
-        // Action: Handle Pasted Code
-        async function handleRemoteCode() {
-            const code = document.getElementById('remote-input').value.trim();
-            if (!code) return;
-            const sdp = decodeSDP(code);
-
-            if (sdp.type === 'offer') {
-                // We are responding to an invite
-                const pc = createPC();
-                pendingPC = pc;
-                pc.ondatachannel = (e) => {
-                    e.channel.pc = pc;
-                    setupDC(e.channel);
-                };
-
-                await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        async function handleSignal(signal) {
+            const peer = peers[signal.from];
+            if (signal.type === 'offer') {
+                const pc = new RTCPeerConnection(iceConfig);
+                pc.ondatachannel = (e) => setupPeer(signal.from, pc, e.channel, signal.username);
+                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
-
-                pc.onicecandidate = (e) => {
-                    if (!e.candidate) {
-                        document.getElementById('response-box').innerText = encodeSDP(pc.localDescription);
-                        document.getElementById('response-area').classList.remove('hidden');
-                        document.getElementById('remote-input').value = '';
-                    }
-                };
-            } else if (sdp.type === 'answer') {
-                // We are finalizing an invite we sent
-                if (!pendingPC) return alert("No pending connection to answer.");
-                await pendingPC.setRemoteDescription(new RTCSessionDescription(sdp));
-                document.getElementById('offer-display').classList.add('hidden');
-                document.getElementById('remote-input').value = '';
-                pendingPC = null;
+                await sendSignal(signal.from, { type: 'answer', sdp: pc.localDescription.sdp, from: user.uid, username: myUsername });
+                pc.onicecandidate = (e) => { if (e.candidate) sendSignal(signal.from, { type: 'ice', candidate: JSON.stringify(e.candidate), from: user.uid }); };
+            } else if (signal.type === 'answer' && peer) {
+                await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
+                if (!peer.username && signal.username) { peer.username = signal.username; updateUI(); }
+            } else if (signal.type === 'ice' && peer) {
+                await peer.pc.addIceCandidate(new RTCIceCandidate(JSON.parse(signal.candidate)));
             }
         }
 
-        // --- UI HELPERS ---
-        function updatePeerCount() {
-            const count = Object.keys(connections).length;
-            document.getElementById('peer-count').innerText = count;
+        function setupPeer(uid, pc, dc, username) {
+            peers[uid] = { pc, dc, username };
+            dc.onopen = () => updateUI();
+            dc.onclose = () => { delete peers[uid]; updateUI(); };
+            dc.onmessage = (e) => addMessage(uid, JSON.parse(e.data));
         }
 
-        function addChatMessage(sender, text) {
-            const list = document.getElementById('message-list');
-            if (list.querySelector('.text-center')) list.innerHTML = '';
+        async function sendSignal(to, data) {
+            if (!user) return;
+            await addDoc(collection(db, 'artifacts', appId, 'users', to, 'signals'), data);
+        }
 
-            const isMe = sender === myId;
+        window.broadcast = () => {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text) return;
+            const msg = { sender: user.uid, username: myUsername, text };
+            Object.values(peers).forEach(p => { if (p.dc.readyState === 'open') p.dc.send(JSON.stringify(msg)); });
+            addMessage('me', msg);
+            input.value = '';
+        };
+
+        function addMessage(uid, msg) {
+            const list = document.getElementById('message-list');
+            if (list.querySelector('.text-slate-600')) list.innerHTML = '';
+            const isMe = uid === 'me';
+            const name = isMe ? myUsername : (msg.username || `User-${uid.slice(0,4)}`);
             const div = document.createElement('div');
-            div.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
+            div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
             div.innerHTML = `
-                <div class="max-w-[85%]">
-                    ${!isMe ? `<div class="peer-tag text-slate-500 mb-1 ml-2">${sender}</div>` : ''}
-                    <div class="rounded-2xl px-4 py-2 ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700'}">
-                        <p class="text-sm">${text}</p>
-                    </div>
+                <span class="text-[9px] text-slate-500 mb-0.5 px-2 uppercase font-bold">${name}</span>
+                <div class="max-w-[85%] px-4 py-1.5 rounded-2xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'}">
+                    ${msg.text}
                 </div>
             `;
             list.appendChild(div);
             list.scrollTop = list.scrollHeight;
         }
 
-        function addSystemMessage(text) {
-            const list = document.getElementById('message-list');
-            const div = document.createElement('div');
-            div.className = "flex justify-center my-2";
-            div.innerHTML = `<span class="text-[10px] bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">${text}</span>`;
-            list.appendChild(div);
-            list.scrollTop = list.scrollHeight;
-        }
-
-        function sendGroupMessage() {
-            const input = document.getElementById('chat-input');
-            const msg = input.value.trim();
-            if (!msg) return;
-
-            const packet = JSON.stringify({ type: 'chat', sender: myId, text: msg });
-            
-            let sentCount = 0;
-            Object.values(connections).forEach(peer => {
-                if (peer.dc.readyState === 'open') {
-                    peer.dc.send(packet);
-                    sentCount++;
-                }
+        function updateUI() {
+            document.getElementById('peer-count').innerText = Object.keys(peers).length + 1;
+            const list = document.getElementById('user-list');
+            list.innerHTML = `
+                <div class="flex items-center gap-3 p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
+                    <div class="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold">YOU</div>
+                    <span class="text-sm font-bold truncate">${myUsername}</span>
+                </div>
+            `;
+            Object.values(peers).forEach(p => {
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-3 p-3 bg-slate-800 rounded-2xl border border-slate-700";
+                div.innerHTML = `
+                    <div class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center text-[10px]"><i class="fas fa-user"></i></div>
+                    <span class="text-sm font-medium truncate">${p.username || 'Connecting...'}</span>
+                    <div class="ml-auto w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                `;
+                list.appendChild(div);
             });
-
-            addChatMessage(myId, msg);
-            input.value = '';
-            
-            if (sentCount === 0) {
-                addSystemMessage("Message not sent. No one is connected yet!");
-            }
         }
 
-        function copyText(id) {
-            const text = document.getElementById(id).innerText;
-            const el = document.createElement('textarea');
-            el.value = text;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            
-            const btn = event.currentTarget;
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check text-green-400"></i> Copied!';
-            setTimeout(() => btn.innerHTML = original, 2000);
-        }
-
-        document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendGroupMessage(); });
+        document.getElementById('message-input').onkeypress = (e) => { if (e.key === 'Enter') broadcast(); };
     </script>
 </body>
 </html>

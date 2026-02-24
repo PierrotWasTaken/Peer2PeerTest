@@ -33,10 +33,6 @@
             border: 1px solid rgba(59, 130, 246, 0.3);
         }
 
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 0.7; }
-        }
         .scanline {
             width: 100%;
             height: 2px;
@@ -44,11 +40,13 @@
             position: absolute;
             animation: scan 4s linear infinite;
             opacity: 0.1;
+            z-index: 50;
+            pointer-events: none;
         }
-        @keyframes scan {
-            from { top: 0%; }
-            to { top: 100%; }
-        }
+        @keyframes scan { from { top: 0%; } to { top: 100%; } }
+
+        .log-entry { animation: slideIn 0.2s ease-out; }
+        @keyframes slideIn { from { transform: translateX(-10px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body class="text-slate-200">
@@ -62,21 +60,28 @@
                 <div class="relative">
                     <div class="absolute inset-0 bg-blue-500 blur-xl opacity-20 animate-pulse"></div>
                     <div class="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-2xl relative z-10 shadow-2xl">
-                        <i class="fas fa-terminal text-white text-xl"></i>
+                        <i class="fas fa-microchip text-white text-xl"></i>
                     </div>
                 </div>
                 <div>
-                    <h1 class="text-2xl font-black tracking-tighter text-white">AUTO-MESH <span class="text-blue-500 text-xs font-mono ml-2 opacity-50">v4.0.0</span></h1>
+                    <h1 class="text-2xl font-black tracking-tighter text-white uppercase">Neural-Mesh</h1>
                     <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                        <p id="status-text" class="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Network Standby</p>
+                        <span id="global-status-dot" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                        <p id="status-text" class="text-[10px] text-slate-400 font-mono uppercase tracking-widest">System Offline</p>
                     </div>
                 </div>
             </div>
 
             <div id="lobby-info" class="hidden flex items-center gap-4">
+                <!-- Toggle Switch -->
+                <div class="flex items-center gap-2 glass px-3 py-2 rounded-xl border border-slate-800">
+                    <span class="text-[8px] font-bold text-slate-500 uppercase">Cross-Server</span>
+                    <button id="mesh-toggle" onclick="toggleMesh()" class="w-10 h-5 bg-slate-800 rounded-full relative transition-colors">
+                        <div id="mesh-toggle-dot" class="absolute left-1 top-1 w-3 h-3 bg-slate-500 rounded-full transition-all"></div>
+                    </button>
+                </div>
                 <div class="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 flex flex-col items-end">
-                    <span class="text-[8px] text-slate-500 font-bold uppercase">Active Mesh</span>
+                    <span class="text-[8px] text-slate-500 font-bold uppercase">Channel</span>
                     <span id="active-room" class="text-blue-400 font-mono font-bold text-sm tracking-widest">---</span>
                 </div>
                 <button onclick="location.reload()" class="w-10 h-10 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-all border border-red-500/20">
@@ -85,70 +90,73 @@
             </div>
         </header>
 
-        <!-- Main Logic Container -->
         <main class="flex-1 min-h-0 relative">
             
             <!-- Setup & Init Screen -->
-            <div id="setup-screen" class="absolute inset-0 flex flex-col lg:flex-row gap-10 items-center justify-center fade-in">
+            <div id="setup-screen" class="absolute inset-0 flex flex-col lg:flex-row gap-10 items-center justify-center">
                 
-                <!-- Left: Form -->
                 <div class="w-full max-w-sm space-y-6">
                     <div class="space-y-2">
-                        <h2 class="text-4xl font-bold text-white tracking-tight">Login to Mesh</h2>
-                        <p class="text-slate-400 text-sm">Synchronize with peers across STUN relay nodes.</p>
+                        <h2 class="text-4xl font-bold text-white tracking-tight">System Login</h2>
+                        <p class="text-slate-400 text-sm">Enter a callsign and room code to begin.</p>
                     </div>
 
                     <div class="space-y-4">
                         <div class="group">
                             <label class="text-[10px] font-bold text-slate-500 uppercase ml-2 mb-1 block group-focus-within:text-blue-400 transition-colors">Callsign</label>
                             <input id="username-input" type="text" placeholder="Pilot-01" 
-                                class="w-full bg-slate-900/50 border border-slate-800 rounded-2xl px-5 py-4 text-base focus:neon-border focus:outline-none transition-all glass font-bold">
+                                class="w-full bg-slate-900/50 border border-slate-800 rounded-2xl px-5 py-4 text-base focus:border-blue-500/50 focus:outline-none transition-all glass font-bold">
                         </div>
                         <div class="group">
-                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2 mb-1 block group-focus-within:text-blue-400 transition-colors">Mesh Channel</label>
-                            <input id="lobby-input" type="text" placeholder="GALAXY-9" 
-                                class="w-full bg-slate-900/50 border border-slate-800 rounded-2xl px-5 py-4 text-base focus:neon-border focus:outline-none tracking-widest uppercase transition-all glass font-bold">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2 mb-1 block group-focus-within:text-blue-400 transition-colors">Room Code</label>
+                            <input id="lobby-input" type="text" placeholder="OMEGA-1" 
+                                class="w-full bg-slate-900/50 border border-slate-800 rounded-2xl px-5 py-4 text-base focus:border-blue-500/50 focus:outline-none tracking-widest uppercase transition-all glass font-bold">
                         </div>
                         <button id="join-btn" onclick="joinLobby()" disabled 
-                            class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 py-5 rounded-2xl font-black text-lg transition-all shadow-xl hover:shadow-blue-500/20">
-                            INITIALIZING NODES...
+                            class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 py-5 rounded-2xl font-black text-lg transition-all shadow-xl">
+                            BOOTING KERNEL...
                         </button>
                     </div>
                 </div>
 
-                <!-- Right: Init Log -->
-                <div class="w-full max-w-sm glass rounded-3xl p-6 border border-slate-800 flex flex-col h-[300px]">
+                <!-- Init Log -->
+                <div class="w-full max-w-sm glass rounded-3xl p-6 border border-slate-800 flex flex-col h-[350px]">
                     <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Initialization Log</span>
-                        <span class="text-[10px] font-mono text-blue-500" id="current-server-id">ID: 000</span>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Connection Logs</span>
+                        <span class="text-[10px] font-mono text-blue-500" id="current-server-id">---</span>
                     </div>
-                    <div id="init-log" class="flex-1 overflow-y-auto space-y-2 font-mono text-[10px] text-slate-400">
-                        <div class="text-blue-400">&gt; Starting Auto-Mesh Core...</div>
+                    <div id="init-log" class="flex-1 overflow-y-auto space-y-2 font-mono text-[10px] text-slate-400 pr-2">
+                        <div class="text-blue-400 log-entry">&gt; System initialized. Starting boot sequence...</div>
                     </div>
                 </div>
             </div>
 
             <!-- Chat Mesh Interface -->
-            <div id="chat-screen" class="hidden h-full flex flex-col lg:flex-row gap-6 fade-in">
-                <!-- Peer Panel -->
+            <div id="chat-screen" class="hidden h-full flex flex-col lg:flex-row gap-6">
+                <!-- Sidebar -->
                 <aside class="w-full lg:w-72 glass rounded-3xl p-5 border border-slate-800 flex flex-col">
                     <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Connected Peers</h3>
+                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Active Nodes</h3>
                         <span id="peer-count" class="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-lg font-bold">1</span>
                     </div>
                     <div id="user-list" class="flex-1 space-y-3 overflow-y-auto pr-2"></div>
                 </aside>
 
-                <!-- Message Terminal -->
+                <!-- Terminal -->
                 <section class="flex-1 glass rounded-3xl border border-slate-800 flex flex-col shadow-2xl overflow-hidden">
-                    <div id="message-list" class="flex-1 overflow-y-auto p-6 space-y-6"></div>
+                    <div id="message-list" class="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div class="h-full flex flex-col items-center justify-center opacity-20">
+                            <i class="fas fa-satellite text-6xl mb-4"></i>
+                            <p class="text-sm uppercase tracking-[0.3em]">Encrypted Channel Established</p>
+                        </div>
+                    </div>
                     
                     <div class="p-4 bg-slate-950/50 border-t border-slate-800">
                         <div class="flex gap-3 bg-slate-900/50 p-2 rounded-2xl border border-slate-800">
-                            <input id="message-input" type="text" placeholder="Transmit data..." 
+                            <input id="message-input" type="text" placeholder="Transmit packet..." 
                                 class="flex-1 bg-transparent px-4 py-3 text-sm focus:outline-none outline-none font-medium">
                             <button onclick="broadcast()" class="bg-blue-600 hover:bg-blue-500 w-12 h-12 rounded-xl transition-all shadow-lg flex items-center justify-center">
-                                <i class="fas fa-chevron-right"></i>
+                                <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
                     </div>
@@ -162,115 +170,129 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Setup
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'p2p-future-mesh';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'p2p-neural-mesh';
 
         let user = null;
         let lobbyId = '';
         let myUsername = '';
         let peers = {}; 
-        let currentIceIndex = 0;
         let activeIceServer = null;
+        let crossMeshEnabled = true;
 
         const stunServers = [
-            { urls: 'stun:stun.l.google.com:19302', label: 'G-NODE-01' },
-            { urls: 'stun:stun1.l.google.com:19302', label: 'G-NODE-02' },
-            { urls: 'stun:stun2.l.google.com:19302', label: 'G-NODE-03' },
-            { urls: 'stun:stun3.l.google.com:19302', label: 'G-NODE-04' },
-            { urls: 'stun:stun.services.mozilla.com', label: 'M-NODE-ALPHA' }
+            { urls: 'stun:stun.l.google.com:19302', label: 'NODE-G1' },
+            { urls: 'stun:stun1.l.google.com:19302', label: 'NODE-G2' },
+            { urls: 'stun:stun.services.mozilla.com', label: 'NODE-MOZ' }
         ];
 
         function log(msg, type = 'info') {
             const container = document.getElementById('init-log');
             const div = document.createElement('div');
-            const color = type === 'error' ? 'text-red-400' : (type === 'success' ? 'text-green-400' : 'text-slate-400');
-            div.className = color;
-            div.innerHTML = `<span class="opacity-30 mr-2">${new Date().toLocaleTimeString([], {hour12: false, second:'2-digit', minute:'2-digit'})}</span> &gt; ${msg}`;
+            const colors = { error: 'text-red-400', success: 'text-green-400', warn: 'text-yellow-400' };
+            div.className = `log-entry ${colors[type] || 'text-slate-400'}`;
+            div.innerHTML = `<span class="opacity-30 mr-2">[${new Date().toLocaleTimeString([], {hour12: false})}]</span> &gt; ${msg}`;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
         }
 
-        // Logic to cycle through STUN servers with 10s timeout
-        async function initIceServer() {
-            const server = stunServers[currentIceIndex];
-            log(`Attempting connection: ${server.label}...`);
-            document.getElementById('current-server-id').innerText = `NODE: ${server.label}`;
+        async function connectToSTUN(index = 0) {
+            if (index >= stunServers.length) {
+                log("All STUN nodes failed. Retrying first node...", 'error');
+                return connectToSTUN(0);
+            }
+
+            const server = stunServers[index];
+            log(`Probing Relay: ${server.label}...`);
+            document.getElementById('current-server-id').innerText = server.label;
 
             return new Promise((resolve) => {
                 const pc = new RTCPeerConnection({ iceServers: [server] });
-                let resolved = false;
+                let finished = false;
 
-                const timeout = setTimeout(() => {
-                    if (!resolved) {
-                        log(`Timeout (10s) on ${server.label}. Rotating...`, 'error');
+                const timer = setTimeout(() => {
+                    if (!finished) {
+                        finished = true;
                         pc.close();
-                        currentIceIndex = (currentIceIndex + 1) % stunServers.length;
-                        resolve(initIceServer());
+                        log(`Relay ${server.label} timed out.`, 'warn');
+                        resolve(connectToSTUN(index + 1));
                     }
                 }, 10000);
 
                 pc.onicecandidate = (e) => {
-                    if (!resolved) {
-                        resolved = true;
-                        clearTimeout(timeout);
-                        log(`Connection successful on ${server.label}`, 'success');
+                    if (!finished) {
+                        finished = true;
+                        clearTimeout(timer);
                         activeIceServer = server;
+                        log(`Relay ${server.label} online. Protocol: STUN/UDP`, 'success');
                         pc.close();
                         resolve(server);
                     }
                 };
-                
-                // Trick to trigger ICE gathering
-                pc.createDataChannel('test');
-                pc.createOffer().then(o => pc.setLocalDescription(o));
+
+                pc.createDataChannel('probe');
+                pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => {});
             });
         }
 
-        // Initialize Authentication
         const initAuth = async () => {
-            log("Authenticating with Cloud...");
+            log("Handshaking with Cloud Relay...");
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (err) { log("Auth Failed: " + err.message, 'error'); }
+            } catch (err) { log("Cloud Handshake Failed: " + err.message, 'error'); }
         };
 
         onAuthStateChanged(auth, async (u) => {
             if (u) {
                 user = u;
-                log("User Identity Verified.", 'success');
-                await initIceServer();
+                log("Cloud link established.", 'success');
+                await connectToSTUN();
                 
                 const btn = document.getElementById('join-btn');
                 btn.disabled = false;
-                btn.innerText = "CONNECT TO MESH";
-                document.getElementById('status-text').innerText = "MESH READY";
+                btn.innerText = "ENTER MESH";
+                document.getElementById('status-text').innerText = "System Ready";
+                document.getElementById('global-status-dot').className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]";
             }
         });
 
+        // Start process immediately
         initAuth();
 
-        window.joinLobby = async () => {
-            const lInput = document.getElementById('lobby-input').value.trim().toUpperCase();
-            const uInput = document.getElementById('username-input').value.trim();
-            if (!lInput || !uInput || !user) return;
+        window.toggleMesh = () => {
+            crossMeshEnabled = !crossMeshEnabled;
+            const dot = document.getElementById('mesh-toggle-dot');
+            const bg = document.getElementById('mesh-toggle');
+            if (crossMeshEnabled) {
+                dot.style.left = '1.25rem';
+                dot.classList.replace('bg-slate-500', 'bg-blue-500');
+                bg.classList.replace('bg-slate-800', 'bg-blue-900/40');
+                log("Cross-Server Mesh: ENABLED", 'info');
+            } else {
+                dot.style.left = '0.25rem';
+                dot.classList.replace('bg-blue-500', 'bg-slate-500');
+                bg.classList.replace('bg-blue-900/40', 'bg-slate-800');
+                log("Cross-Server Mesh: DISABLED", 'warn');
+            }
+            updateUI();
+        };
 
-            lobbyId = lInput;
-            myUsername = uInput;
+        window.joinLobby = async () => {
+            lobbyId = document.getElementById('lobby-input').value.trim().toUpperCase();
+            myUsername = document.getElementById('username-input').value.trim();
+            if (!lobbyId || !myUsername) return;
 
             document.getElementById('active-room').innerText = lobbyId;
             document.getElementById('setup-screen').classList.add('hidden');
             document.getElementById('lobby-info').classList.remove('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
-
-            updateUI(); 
 
             const presenceRef = doc(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members', user.uid);
             await setDoc(presenceRef, {
@@ -280,9 +302,8 @@
                 joinedAt: Date.now()
             });
 
-            const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members');
-            onSnapshot(membersRef, (snapshot) => {
-                snapshot.docChanges().forEach(change => {
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'lobbies', lobbyId, 'members'), (snap) => {
+                snap.docChanges().forEach(change => {
                     const data = change.doc.data();
                     if (data.uid === user.uid) return;
                     if (change.type === 'added') {
@@ -297,9 +318,8 @@
                 });
             });
 
-            const signalsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'signals');
-            onSnapshot(signalsRef, (snapshot) => {
-                snapshot.docChanges().forEach(async (change) => {
+            onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'signals'), (snap) => {
+                snap.docChanges().forEach(async (change) => {
                     if (change.type === 'added') {
                         const signal = change.doc.data();
                         handleSignal(signal);
@@ -309,26 +329,19 @@
             });
 
             window.addEventListener('beforeunload', () => deleteDoc(presenceRef));
+            toggleMesh(); // Initialize visual state
         };
 
         async function initiateConnection(peerUid, peerUsername, peerServer) {
             if (peers[peerUid]) return;
             const pc = new RTCPeerConnection({ iceServers: [activeIceServer] });
             const dc = pc.createDataChannel('chat');
-            
             peers[peerUid] = { pc, dc, username: peerUsername, server: peerServer };
             setupPeerEvents(peerUid);
 
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-
-            await sendSignal(peerUid, { 
-                type: 'offer', 
-                sdp: JSON.stringify(pc.localDescription), 
-                from: user.uid, 
-                username: myUsername,
-                server: activeIceServer.label
-            });
+            await sendSignal(peerUid, { type: 'offer', sdp: JSON.stringify(pc.localDescription), from: user.uid, username: myUsername, server: activeIceServer.label });
 
             pc.onicecandidate = (e) => {
                 if (e.candidate) sendSignal(peerUid, { type: 'ice', candidate: JSON.stringify(e.candidate), from: user.uid });
@@ -342,18 +355,10 @@
                     peers[signal.from] = { pc, dc: e.channel, username: signal.username, server: signal.server };
                     setupPeerEvents(signal.from);
                 };
-
                 await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.sdp)));
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
-
-                await sendSignal(signal.from, { 
-                    type: 'answer', 
-                    sdp: JSON.stringify(pc.localDescription), 
-                    from: user.uid,
-                    server: activeIceServer.label
-                });
-
+                await sendSignal(signal.from, { type: 'answer', sdp: JSON.stringify(pc.localDescription), from: user.uid, server: activeIceServer.label });
                 pc.onicecandidate = (e) => {
                     if (e.candidate) sendSignal(signal.from, { type: 'ice', candidate: JSON.stringify(e.candidate), from: user.uid });
                 };
@@ -366,20 +371,15 @@
 
         function setupPeerEvents(uid) {
             const peer = peers[uid];
-            peer.dc.onopen = () => {
-                updateUI();
-                addSystemMsg(`${peer.username} linked via ${peer.server}`);
+            peer.dc.onopen = () => { updateUI(); addSystemMsg(`${peer.username} linked.`); };
+            peer.dc.onclose = () => { delete peers[uid]; updateUI(); addSystemMsg(`${peer.username} link lost.`); };
+            peer.dc.onmessage = (e) => {
+                if (!crossMeshEnabled && peer.server !== activeIceServer.label) return;
+                addMessage(uid, JSON.parse(e.data));
             };
-            peer.dc.onclose = () => {
-                addSystemMsg(`${peer.username} link lost.`);
-                delete peers[uid];
-                updateUI();
-            };
-            peer.dc.onmessage = (e) => addMessage(uid, JSON.parse(e.data));
         }
 
         async function sendSignal(to, data) {
-            if (!user) return;
             await addDoc(collection(db, 'artifacts', appId, 'users', to, 'signals'), data);
         }
 
@@ -387,31 +387,30 @@
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if (!text) return;
-
-            const msg = { username: myUsername, text, server: activeIceServer.label };
+            const msg = { text, username: myUsername, server: activeIceServer.label };
             Object.values(peers).forEach(p => {
-                if (p.dc.readyState === 'open') p.dc.send(JSON.stringify(msg));
+                if (p.dc.readyState === 'open') {
+                    if (crossMeshEnabled || p.server === activeIceServer.label) {
+                        p.dc.send(JSON.stringify(msg));
+                    }
+                }
             });
-
             addMessage('me', msg);
             input.value = '';
-        }
+        };
 
         function addMessage(uid, msg) {
             const list = document.getElementById('message-list');
             if (list.querySelector('.opacity-20')) list.innerHTML = '';
-            
             const isMe = uid === 'me';
-            const name = isMe ? "LOCAL_USER" : msg.username;
-            
             const div = document.createElement('div');
-            div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} fade-in`;
+            div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-4`;
             div.innerHTML = `
                 <div class="flex items-center gap-2 mb-1 px-1">
-                    <span class="text-[9px] font-black text-blue-500 uppercase tracking-tighter">${name}</span>
+                    <span class="text-[9px] font-black text-blue-500 uppercase">${isMe ? 'Local' : msg.username}</span>
                     <span class="text-[8px] text-slate-600 font-mono">[${msg.server}]</span>
                 </div>
-                <div class="max-w-[85%] px-5 py-3 rounded-2xl text-sm leading-relaxed ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'glass text-slate-200 rounded-tl-none border border-slate-800'}">
+                <div class="max-w-[85%] px-5 py-3 rounded-2xl text-sm glass ${isMe ? 'bg-blue-600/20 border-blue-500/30' : 'border-slate-800'}">
                     ${escapeHtml(msg.text)}
                 </div>
             `;
@@ -422,8 +421,8 @@
         function addSystemMsg(txt) {
             const list = document.getElementById('message-list');
             const div = document.createElement('div');
-            div.className = "flex justify-center my-6";
-            div.innerHTML = `<span class="text-[8px] font-mono glass text-slate-500 px-4 py-1.5 rounded-full border border-slate-800 uppercase tracking-widest animate-pulse">${txt}</span>`;
+            div.className = "flex justify-center my-4";
+            div.innerHTML = `<span class="text-[8px] font-mono glass text-slate-500 px-4 py-1 rounded-full border border-slate-800 uppercase tracking-widest">${txt}</span>`;
             list.appendChild(div);
             list.scrollTop = list.scrollHeight;
         }
@@ -431,34 +430,28 @@
         function updateUI() {
             document.getElementById('peer-count').innerText = Object.keys(peers).length + 1;
             const list = document.getElementById('user-list');
-            list.innerHTML = `
-                <div class="p-4 glass rounded-2xl border-l-4 border-blue-500 flex flex-col gap-1">
-                    <span class="text-[10px] font-black text-blue-500 uppercase">Self</span>
-                    <span class="text-sm font-bold truncate">${myUsername}</span>
-                    <span class="text-[8px] font-mono text-slate-500">${activeIceServer.label}</span>
-                </div>
-            `;
+            list.innerHTML = `<div class="p-4 glass rounded-2xl border-l-4 border-blue-500 flex flex-col gap-1">
+                <span class="text-[10px] font-black text-blue-500 uppercase tracking-tighter">Self Node</span>
+                <span class="text-sm font-bold truncate">${myUsername}</span>
+                <span class="text-[8px] font-mono text-slate-500">${activeIceServer.label}</span>
+            </div>`;
             Object.values(peers).forEach(p => {
+                const isDiff = p.server !== activeIceServer.label;
                 const div = document.createElement('div');
-                div.className = "p-4 glass rounded-2xl border-l-4 border-slate-800 flex flex-col gap-1 transition-all hover:border-green-500";
+                div.className = `p-4 glass rounded-2xl border-l-4 ${isDiff ? 'border-purple-500/50' : 'border-green-500/50'} flex flex-col gap-1 opacity-${(isDiff && !crossMeshEnabled) ? '40' : '100'}`;
                 div.innerHTML = `
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-black text-slate-500 uppercase">Peer Node</span>
-                        <div class="w-1.5 h-1.5 rounded-full ${p.dc.readyState === 'open' ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-yellow-500'}"></div>
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Peer Node</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
                     </div>
                     <span class="text-sm font-bold truncate">${p.username}</span>
-                    <span class="text-[8px] font-mono text-slate-500">${p.server}</span>
+                    <span class="text-[8px] font-mono text-slate-500">${p.server} ${isDiff ? '(CROSS)' : ''}</span>
                 `;
                 list.appendChild(div);
             });
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
+        function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
         document.getElementById('message-input').onkeypress = (e) => { if (e.key === 'Enter') broadcast(); };
     </script>
 </body>

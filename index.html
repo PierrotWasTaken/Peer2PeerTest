@@ -135,10 +135,15 @@
         let myUsername = '';
         let peers = {}; 
         
+        // Extended ICE configuration with Google and Mozilla STUN backups
         const iceConfig = { 
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:stun.services.mozilla.com' }
             ] 
         };
 
@@ -202,8 +207,6 @@
                     if (data.uid === user.uid) return;
 
                     if (change.type === 'added') {
-                        // New user joined: If they are older than us, we wait for them. 
-                        // If we are newer, we initiate.
                         if (data.joinedAt < Date.now()) {
                             initiateConnection(data.uid, data.username);
                         }
